@@ -3400,10 +3400,11 @@ let state = {
   co: [],
   oee: [],
   dashTotal: null,
+  yoy26: null,
 };
-const STORAGE_KEY = 'mpg_prod_sys_v9';
-// Clear old version cache so fresh 95-record seed loads correctly
-try { for(let _v=1;_v<=8;_v++) localStorage.removeItem('mpg_prod_sys_v'+_v); } catch(e) {}
+const STORAGE_KEY = 'mpg_prod_sys_v10';
+// Clear old version cache
+try { for(let _v=1;_v<=9;_v++) localStorage.removeItem('mpg_prod_sys_v'+_v); } catch(e) {}
 
 // ── PERSISTENCE ──
 function saveState() {
@@ -4153,42 +4154,44 @@ function refreshAnalytics() {
 
 // ════════════ YEAR COMPARE ════════════
 function buildLive2026() {
-  // Build 2026 monthly arrays dynamically from state.dpr
-  const prod    = Array(12).fill(null);
-  const patches = Array(12).fill(null);
-  const co      = Array(12).fill(null);
-  const losses  = Array(12).fill(null);
-  const lossPct = Array(12).fill(null);
-  const utlTon  = Array(12).fill(null);
-  const utlPatch= Array(12).fill(null);
-  const mpp     = Array(12).fill(null);
-  const oee     = Array(12).fill(null);
-
+  // Read 2026 data from state.yoy26 if it was imported from Excel
+  // state.yoy26 is populated by replaceAllFromExcel when it reads the '2024 VS 2025 VS 2026' sheet
+  if (state.yoy26 && state.yoy26.prod && state.yoy26.prod.some(v=>v!=null)) {
+    return state.yoy26;
+  }
+  // Fallback: calculate from DPR entries
   const rows26 = state.dpr.filter(r => r.date && r.date.startsWith('2026'));
-  if (!rows26.length) return null; // fallback to hardcoded
+  if (!rows26.length) return null;
 
-  // Group by month
+  const prod     = Array(12).fill(null);
+  const patches  = Array(12).fill(null);
+  const co       = Array(12).fill(null);
+  const losses   = Array(12).fill(null);
+  const lossPct  = Array(12).fill(null);
+  const utlTon   = Array(12).fill(null);
+  const utlPatch = Array(12).fill(null);
+  const mpp      = Array(12).fill(null);
+  const oee      = Array(12).fill(null);
+
   const byMonth = {};
   rows26.forEach(r => {
-    const mo = parseInt(r.date.split('-')[1]) - 1; // 0-indexed
+    const mo = parseInt(r.date.split('-')[1]) - 1;
     if (!byMonth[mo]) byMonth[mo] = [];
     byMonth[mo].push(r);
   });
-
   Object.entries(byMonth).forEach(([mo, rows]) => {
     const m = parseInt(mo);
-    const totalProd   = rows.reduce((a,r)=>a+(r.batchsize||0),0);
-    const totalLoss   = rows.reduce((a,r)=>a+(r.co_losses||0)+(r.total_loss||0),0);
-    const coCount     = rows.filter(r=>r.co).length;
-    const batchCount  = rows.length;
-    prod[m]     = +(totalProd/1000).toFixed(3); // kg → ton
-    patches[m]  = batchCount;
-    co[m]       = coCount;
-    losses[m]   = +(totalLoss/1000).toFixed(3);
-    lossPct[m]  = totalProd>0 ? +(totalLoss/totalProd) : null;
-    mpp[m]      = batchCount>0 ? +(totalProd/batchCount).toFixed(1) : null;
+    const totalProd  = rows.reduce((a,r)=>a+(r.batchsize||0),0);
+    const totalLoss  = rows.reduce((a,r)=>a+(r.total_loss||0),0);
+    const coCount    = rows.filter(r=>r.co).length;
+    const batchCount = rows.length;
+    prod[m]    = +(totalProd/1000).toFixed(3);
+    patches[m] = batchCount;
+    co[m]      = coCount;
+    losses[m]  = +(totalLoss/1000).toFixed(3);
+    lossPct[m] = totalProd>0 ? +(totalLoss/totalProd) : null;
+    mpp[m]     = batchCount>0 ? +(totalProd/batchCount).toFixed(1) : null;
   });
-
   return { prod, patches, co, losses, lossPct, utlTon, utlPatch, mpp, oee };
 }
 
@@ -4945,6 +4948,34 @@ function loadJSON(event) {
       const parsed=JSON.parse(e.target.result);
       state={dpr:parsed.dpr||[],co:parsed.co||[],oee:parsed.oee||[]};
       saveState(); renderDPRTable(); renderCOTable(); renderOEETable(); renderOEESheetTable(); refreshDashboard(); updateCOStats(); updateStats();
+      // ── Read 2026 data from '2024 VS 2025 VS 2026' sheet ──
+      const yoySheet = wb.SheetNames.find(n => n.includes('2024') && n.includes('2025') && n.includes('2026'));
+      if (yoySheet) {
+        const yws = wb.Sheets[yoySheet];
+        const ydata = XLSX.utils.sheet_to_json(yws, {header:1, defval:null});
+        // Rows 3-14 (0-indexed) = Jan-Dec, columns: D=prod, J=utlTon, P=utlPatch, V=mpp, AC=patches
+        // Rows 20-31 = Jan-Dec CO/Losses: C=co, P=losses, V=lossPct, AC=oee
+        const y26 = {
+          prod:Array(12).fill(null), utlTon:Array(12).fill(null), utlPatch:Array(12).fill(null),
+          mpp:Array(12).fill(null), patches:Array(12).fill(null),
+          co:Array(12).fill(null), losses:Array(12).fill(null), lossPct:Array(12).fill(null), oee:Array(12).fill(null)
+        };
+        for (let m=0; m<12; m++) {
+          const r1 = ydata[3+m] || [];  // production rows
+          const r2 = ydata[20+m] || []; // CO/losses rows
+          if (r1[3]  != null && typeof r1[3]  === 'number') y26.prod[m]     = +r1[3].toFixed(3);
+          if (r1[9]  != null && typeof r1[9]  === 'number') y26.utlTon[m]   = r1[9];
+          if (r1[15] != null && typeof r1[15] === 'number') y26.utlPatch[m] = r1[15];
+          if (r1[21] != null && typeof r1[21] === 'number') y26.mpp[m]      = +r1[21].toFixed(1);
+          if (r1[28] != null && typeof r1[28] === 'number') y26.patches[m]  = r1[28];
+          if (r2[2]  != null && typeof r2[2]  === 'number') y26.co[m]       = r2[2];
+          if (r2[15] != null && typeof r2[15] === 'number') y26.losses[m]   = +r2[15].toFixed(3);
+          if (r2[21] != null && typeof r2[21] === 'number') y26.lossPct[m]  = r2[21];
+          if (r2[28] != null && typeof r2[28] === 'number') y26.oee[m]      = r2[28];
+        }
+        state.yoy26 = y26;
+        saveState();
+      }
       // Refresh YOY with live 2026 data
       if(typeof refreshCompare === 'function') try { refreshCompare(); } catch(e) {}
       toast('Backup restored: '+state.dpr.length+' DPR records');
