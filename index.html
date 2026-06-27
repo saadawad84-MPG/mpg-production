@@ -1807,22 +1807,22 @@ const YOY = {
   prod: {
     y2024: [114.208,112.729,116.372,92.474,114.573,155.839,182.237,154.03,213.052,234.24,222.477,150.58],
     y2025: [171.985,169.21,164.98,166.11,193.135,154.458,181.66,191.7928,144.6,165.927,230.139,204.47],
-    y2026: [163.835,151.325,122.7,128.9,135.6,null,null,null,null,null,null,null]
+    y2026: [163.835,151.325,122.7,128.9,135.6,134.433,null,null,null,null,null,null]
   },
   // Utilization / Ton
   utlTon: {
     y2025: [0.37136,0.39101,0.34760,0.40899,0.36729,0.26735,0.40408,0.41219,0.31457,0.38756,0.47498,0.47550],
-    y2026: [0.35225,0.35225,0.19786,0.19786,0.2984,null,null,null,null,null,null,null]
+    y2026: [0.35224,0.35224,0.29751,0.29751,0.2984,0.29751,null,null,null,null,null,null]
   },
   // Utilization / Patch
   utlPatch: {
     y2025: [0.42667,0.41880,0.37190,0.48438,0.45646,0.37322,0.49580,0.46757,0.35246,0.45739,0.52120,0.48214],
-    y2026: [0.42776,0.42776,0.24934,0.24934,0.357,null,null,null,null,null,null,null]
+    y2026: [0.42776,0.42776,0.36340,0.36340,0.357,0.36340,null,null,null,null,null,null]
   },
   // MFG MMP
   mpp: {
     y2025: [284.773,470.109,720.789,980.085,437.453,757.488,16.581,51.376,164.381,113.842,193.961,321.903],
-    y2026: [633.902,633.902,512,600.955,633,null,null,null,null,null,null,null]
+    y2026: [633.902,633.902,512,654.44,633,654.44,null,null,null,null,null,null]
   },
   // Patches
   patches: {
@@ -1832,26 +1832,26 @@ const YOY = {
   // CO count
   co: {
     y2025: [135,125,109,160,160,109,163,151,116,145,175,129],
-    y2026: [120,115,105,68,106,null,null,null,null,null,null,null]
+    y2026: [120,115,105,101,106,101,null,null,null,null,null,null]
   },
   // CO %
   coPct: {
     y2025: [0.84375,0.85034,0.80741,0.86022,0.92486,0.83206,0.92090,0.87283,0.89922,0.90062,0.83732,0.79630],
-    y2026: [0.769,0.757,0.795,0.71579,0.71579,null,null,null,null,null,null,null]
+    y2026: [0.769,0.757,0.795,0.71631,0.71631,0.71631,null,null,null,null,null,null]
   },
   // Losses (ton)
   losses: {
     y2025: [3.658,3.627,2.658,3.988,4.213,2.989,4.667,4.637,3.655,3.682,4.724,3.615],
-    y2026: [3.449,3.357,2.98,3.25,3.26,null,null,null,null,null,null,null]
+    y2026: [3.449,3.357,2.98,3.25,3.26,3.831,null,null,null,null,null,null]
   },
   // Losses %
   lossPct: {
     y2025: [0.02127,0.02143,0.01611,0.02401,0.02181,0.01935,0.02569,0.02418,0.02528,0.02219,0.02053,0.01768],
-    y2026: [0.02105,0.02218,0.0243,0.02372,0.0223,null,null,null,null,null,null,null]
+    y2026: [0.02105,0.02218,0.0243,0.02849,0.0223,0.02849,null,null,null,null,null,null]
   },
   // OEE %
   oee: {
-    y2026: [0.99,0.9914,0.9921,0.9955,0.994,null,null,null,null,null,null,null]
+    y2026: [0.99,0.9914,0.9921,0.99695,0.994,0.99695,null,null,null,null,null,null]
   },
   // Quarterly Production
   quarterly: {
@@ -5005,25 +5005,37 @@ function loadJSON(event) {
       if (yoySheet) {
         const yws = wb.Sheets[yoySheet];
         const ydata = XLSX.utils.sheet_to_json(yws, {header:1, defval:null});
-        // Rows 3-14 (0-indexed) = Jan-Dec, columns: D=prod, J=utlTon, P=utlPatch, V=mpp, AC=patches
-        // Rows 20-31 = Jan-Dec CO/Losses: C=co, P=losses, V=lossPct, AC=oee
+        // Production table: rows 3-14 (0-indexed) = Jan-Dec
+        // col[0]=Month, col[1]=2024, col[2]=2025, col[3]=2026 prod(T)
+        // col[8]=utlTon2025, col[9]=utlTon2026
+        // col[14]=utlPatch2025, col[15]=utlPatch2026
+        // col[20]=mpp2025, col[21]=mpp2026
+        // col[27]=patches2025, col[28]=patches2026
+        // CO/Losses table: rows 19-30 (0-indexed) = Jan-Dec
+        // col[0]=Month, col[1]=co2025, col[2]=co2026
+        // col[8]=coPct2025, col[9]=coPct2026
+        // col[13]=losses2025(T), col[15]=losses2026(T)
+        // col[20]=lossPct2025, col[21]=lossPct2026
+        // col[27]=oee2025, col[28]=oee2026
         const y26 = {
           prod:Array(12).fill(null), utlTon:Array(12).fill(null), utlPatch:Array(12).fill(null),
           mpp:Array(12).fill(null), patches:Array(12).fill(null),
-          co:Array(12).fill(null), losses:Array(12).fill(null), lossPct:Array(12).fill(null), oee:Array(12).fill(null)
+          co:Array(12).fill(null), losses:Array(12).fill(null),
+          lossPct:Array(12).fill(null), oee:Array(12).fill(null)
         };
         for (let m=0; m<12; m++) {
-          const r1 = ydata[3+m] || [];  // production rows
-          const r2 = ydata[20+m] || []; // CO/losses rows
-          if (r1[3]  != null && typeof r1[3]  === 'number') y26.prod[m]     = +r1[3].toFixed(3);
-          if (r1[9]  != null && typeof r1[9]  === 'number') y26.utlTon[m]   = r1[9];
-          if (r1[15] != null && typeof r1[15] === 'number') y26.utlPatch[m] = r1[15];
-          if (r1[21] != null && typeof r1[21] === 'number') y26.mpp[m]      = +r1[21].toFixed(1);
-          if (r1[28] != null && typeof r1[28] === 'number') y26.patches[m]  = r1[28];
-          if (r2[2]  != null && typeof r2[2]  === 'number') y26.co[m]       = r2[2];
-          if (r2[15] != null && typeof r2[15] === 'number') y26.losses[m]   = +r2[15].toFixed(3);
-          if (r2[21] != null && typeof r2[21] === 'number') y26.lossPct[m]  = r2[21];
-          if (r2[28] != null && typeof r2[28] === 'number') y26.oee[m]      = r2[28];
+          const r1 = ydata[3+m]  || [];  // production table rows (0-indexed row 3 = Jan)
+          const r2 = ydata[20+m] || [];  // CO/losses table rows (0-indexed row 20 = Jan)
+          const n = v => (v != null && typeof v === 'number') ? v : null;
+          y26.prod[m]     = n(r1[3]);
+          y26.utlTon[m]   = n(r1[9]);
+          y26.utlPatch[m] = n(r1[15]);
+          y26.mpp[m]      = n(r1[21]) != null ? +n(r1[21]).toFixed(1) : null;
+          y26.patches[m]  = n(r1[28]);
+          y26.co[m]       = n(r2[2]);
+          y26.losses[m]   = n(r2[15]);
+          y26.lossPct[m]  = n(r2[21]);
+          y26.oee[m]      = n(r2[28]);
         }
         state.yoy26 = y26;
         saveState();
